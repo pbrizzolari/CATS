@@ -1,6 +1,9 @@
 ### merged final dataset
 library(tidyverse)
 library(rstudioapi)
+library(ggfortify)
+library(caret)
+
 setwd(dirname(getActiveDocumentContext()$path))
 data <- read.table("merged.txt", header=TRUE)
 head(data[,1:7])
@@ -8,7 +11,7 @@ dim(data)
 summary(data[,1:7])
 
 ########## multinomial models ##########
-X <- as.data.frame(data[,3:2836])
+X <- as.data.frame(data[,2:2836])
 head(X[,1:7])
 library(VGAM)
 vglm1 <- vglm(data$Subgroup~X, multinomial)
@@ -26,24 +29,11 @@ feature_selection <- function(data, X, y, perc = 0.6){
   return(data_fs)
 }
 
-fs_matrix <- filterVarImp(data[,3:2836], as.factor(data[,2]))
-head(fs_matrix)
-fs <- apply(fs_matrix,1,mean)
-head(fs)
-summary(fs)
-sorted_features <- sort(fs, decreasing = T)
-n <- length(sorted_features[sorted_features >= 0.6]) # around half of the dataset
-hist(fs, nclass = 100)
-selected <- sorted_features[1:n]
-
-keep <- c(names(data[,1:2]), names(selected))
-data_fs <- data[, (names(data) %in% keep)]
-head(data_fs[,1:7])
+data_fs <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.6)
 
 pc <- prcomp(data_fs[,3:length(data_fs)], scale.=T, center = TRUE) # con scale.=T ottengo le PC a partire dalle correlazioni
 summary(pc)
 biplot(pc)
-library(ggfortify)
 
 df_out <- as.data.frame(pc$x)
 df_out$y <- data_fs[,2]
@@ -52,9 +42,8 @@ p<-p+geom_point()
 p
 
 ########## classifier ##########
-library(caret)
 
-### knn
+#### knn #### 
 data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 1)
 model_knn <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "knn",
                    trControl = trainControl(method="cv", number = 10))
@@ -77,10 +66,10 @@ for (i in perc) {
 }
 plot(perc, maxx, type="b")
 
-### random forest 
+#### random forest #### 
 data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.6)
 model_rf <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "rf",
-                   trControl = trainControl(method="cv", number = 10))
+                   trControl = trainControl(method="repeatedcv", number = 5, repeats = 5))
 model_rf
 
 perc <- seq(0.5, 0.75, by=0.05)
@@ -108,6 +97,36 @@ model_rf$resample
 
 predict(model_rf)
 table(predict(model_rf), data[,2])
+
+
+##### ranger ####
+set.seed(1234)
+data_fs <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.6)
+X <- as.data.frame(data_fs[,2:dim(data_fs)[2]])
+dim(X)
+tuneGrid <- data.frame(
+  .mtry = c(10, 100, 250, 500, 750, 1000),
+  .splitrule = "gini",
+  .min.node.size = 5
+)
+model <- train(
+  Subgroup~.,
+  tuneGrid = tuneGrid,
+  data = X, 
+  method = "ranger",
+  trControl = trainControl(
+    method = "repeatedcv", 
+    number = 3,
+    repeats = 20,
+    verboseIter = TRUE
+  )
+)
+model
+plot(model)
+
+
+pred <- predict(model, newdata = data[,2:dim(data)[2]])
+table(pred, data$Subgroup)
 
 ##### rf specific ##### 
 library("randomForest")
