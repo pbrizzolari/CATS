@@ -5,16 +5,15 @@ library(ggfortify)
 library(caret)
 
 setwd(dirname(getActiveDocumentContext()$path))
-data <- read.table("merged.txt", header=TRUE)
+data <- read.csv2("merged.csv", header = T, sep=";", row.names = 1)
 head(data[,1:7])
 dim(data)
 summary(data[,1:7])
 
 ########## multinomial models ##########
-X <- as.data.frame(data[,2:2836])
-head(X[,1:7])
 library(VGAM)
-vglm1 <- vglm(data$Subgroup~X, multinomial)
+vglm1 <- vglm(Subgroup~.,data = data, multinomial)
+summary(vglm1)
 
 ########## feature selection ##########
 feature_selection <- function(data, X, y, perc = 0.6){
@@ -100,19 +99,23 @@ table(predict(model_rf), data[,2])
 
 
 ##### ranger ####
-set.seed(1234)
-data_fs <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.6)
-X <- as.data.frame(data_fs[,2:dim(data_fs)[2]])
-dim(X)
+set.seed(123)
+indxTrain <- createDataPartition(y = data[,1], p = 0.75, list = FALSE)
+training <- data[indxTrain,]
+testing <- data[-indxTrain,]
+prop.table(table(training$Subgroup))
+prop.table(table(testing$Subgroup))
+prop.table(table(data$Subgroup))
+
 tuneGrid <- data.frame(
-  .mtry = c(10, 100, 250, 500, 750, 1000),
+  .mtry = seq(10, dim(training)[2], by = 200),
   .splitrule = "gini",
   .min.node.size = 5
 )
 model <- train(
   Subgroup~.,
   tuneGrid = tuneGrid,
-  data = X, 
+  data = training, 
   method = "ranger",
   trControl = trainControl(
     method = "repeatedcv", 
@@ -124,40 +127,21 @@ model <- train(
 model
 plot(model)
 
+pred <- predict(model, newdata = testing)
+confusionMatrix(pred, as.factor(testing$Subgroup))
 
-pred <- predict(model, newdata = data[,2:dim(data)[2]])
-table(pred, data$Subgroup)
+library(pROC)
+pred_prob <- predict(model, newdata = testing, type="response")
+rfROC <- roc(response = as.factor(testing$Subgroup), predictor = pred_prob, levels = c("HER2+", "HR+"))
+rfROC
+
+plot(rfROC, type="S", print.thres= 0.5)
+
 
 ##### rf specific ##### 
 library("randomForest")
 set.seed(1234)
 
-# create 2 train and test dataset
-data_rf <- data
-data_rf <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.65)
-ind = sample(2, nrow(data_rf), replace=TRUE, prob=c(0.8,0.2))
-trainData = data_rf[ind==1,]
-testData = data_rf[ind==2,]
-
-# model
-fit_rf = randomForest(as.factor(Subgroup)~., data=trainData[,2:length(trainData)], ntree=2000, proximity=F)
-fit_rf
-plot(fit_rf)
-# importance of the features
-# importance(fit_rf)
-table(importance(fit_rf)<=0)
-# testing data
-pred <- predict(fit_rf, newdata=testData)
-CM <- table(pred, testData$Subgroup)
-CM
-accuracy = (sum(diag(CM)))/sum(CM)
-accuracy
-
-plot(margin(fit_rf, testData$Subgroup))
-
-## comments:
-# accuracy doesn't improve for a bigger amount of tree, but same sample
-# need simulations to get a reliable accurancy
 
 
 
