@@ -100,7 +100,7 @@ table(predict(model_rf), data[,2])
 
 ##### ranger ####
 set.seed(123)
-indxTrain <- createDataPartition(y = data[,1], p = 0.75, list = FALSE)
+indxTrain <- createDataPartition(y = data[,1], p = 0.6, list = FALSE)
 training <- data[indxTrain,]
 testing <- data[-indxTrain,]
 prop.table(table(training$Subgroup))
@@ -130,12 +130,6 @@ plot(model)
 pred <- predict(model, newdata = testing)
 confusionMatrix(pred, as.factor(testing$Subgroup))
 
-library(pROC)
-pred_prob <- predict(model, newdata = testing, type="response")
-rfROC <- roc(response = as.factor(testing$Subgroup), predictor = pred_prob, levels = c("HER2+", "HR+"))
-rfROC
-
-plot(rfROC, type="S", print.thres= 0.5)
 
 
 ##### rf specific ##### 
