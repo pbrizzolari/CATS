@@ -1,5 +1,8 @@
 ### merged final dataset
-data <- read.table("/Users/caterina/Desktop/B4TM/Assignment/merged.txt", header=TRUE)
+library(tidyverse)
+library(rstudioapi)
+setwd(dirname(getActiveDocumentContext()$path))
+data <- read.table("merged.txt", header=TRUE)
 head(data[,1:7])
 dim(data)
 summary(data[,1:7])
