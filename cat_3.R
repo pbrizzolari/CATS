@@ -1,0 +1,142 @@
+### merged final dataset
+data <- read.table("/Users/caterina/Desktop/B4TM/Assignment/merged.txt", header=TRUE)
+head(data[,1:7])
+dim(data)
+summary(data[,1:7])
+
+########## multinomial models ##########
+X <- as.data.frame(data[,3:2836])
+head(X[,1:7])
+library(VGAM)
+vglm1 <- vglm(data$Subgroup~X, multinomial)
+
+########## feature selection ##########
+feature_selection <- function(data, X, y, perc = 0.6){
+  fs_matrix <- filterVarImp(X, y)
+  fs <- apply(fs_matrix,1,mean)
+  sorted_features <- sort(fs, decreasing = T)
+  n <- length(sorted_features[sorted_features >= perc])
+  selected <- sorted_features[1:n]
+  
+  keep <- c(names(data[,1:2]), names(selected))
+  data_fs <- data[, (names(data) %in% keep)]
+  return(data_fs)
+}
+
+fs_matrix <- filterVarImp(data[,3:2836], as.factor(data[,2]))
+head(fs_matrix)
+fs <- apply(fs_matrix,1,mean)
+head(fs)
+summary(fs)
+sorted_features <- sort(fs, decreasing = T)
+n <- length(sorted_features[sorted_features >= 0.6]) # around half of the dataset
+hist(fs, nclass = 100)
+selected <- sorted_features[1:n]
+
+keep <- c(names(data[,1:2]), names(selected))
+data_fs <- data[, (names(data) %in% keep)]
+head(data_fs[,1:7])
+
+pc <- prcomp(data_fs[,3:length(data_fs)], scale.=T, center = TRUE) # con scale.=T ottengo le PC a partire dalle correlazioni
+summary(pc)
+biplot(pc)
+library(ggfortify)
+
+df_out <- as.data.frame(pc$x)
+df_out$y <- data_fs[,2]
+p<-ggplot(df_out,aes(x=PC1,y=PC2,color=y ))
+p<-p+geom_point()
+p
+
+########## classifier ##########
+library(caret)
+
+### knn
+data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 1)
+model_knn <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "knn",
+                   trControl = trainControl(method="cv", number = 10))
+model_knn
+
+model_knn$results[model_knn$results[,1]==model_knn$bestTune[1,1]]
+max(model_knn$results[,2])
+which(max(model_knn$results[,2]))
+perc <- seq(0.5, 0.75, by=0.01)
+maxx <- kk <- array(NA, length(perc))
+j <- 1
+for (i in perc) {
+  data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = i)
+  model_knn <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "knn",
+                     trControl = trainControl(method="cv", number = 10))
+  maxx[j] <- max(model_knn$results[,2])
+  kk[j] <- model_knn$bestTune[1,1]
+  j <- j + 1
+  print(i)
+}
+plot(perc, maxx, type="b")
+
+### random forest 
+data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.6)
+model_rf <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "rf",
+                   trControl = trainControl(method="cv", number = 10))
+model_rf
+
+perc <- seq(0.5, 0.75, by=0.05)
+maxx <- kk <- array(NA, length(perc))
+j <- 1
+
+for (i in perc) {
+  data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = i)
+  model_rf <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "rf",
+                     trControl = trainControl(method="cv", number = 10))
+  maxx[j] <- max(model_rf$results[,2])
+  kk[j] <- model_rf$bestTune[1,1]
+  j <- j + 1
+  print(i)
+}
+plot(perc, maxx, type="b")
+maxx
+kk
+
+# perc = 0.65
+data_feature <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.65)
+model_rf <- train(data_feature[,3:length(data_feature)], data_feature[,2], method = "extraTrees",
+                  trControl = trainControl(method="cv", number = 10))
+model_rf$resample
+
+predict(model_rf)
+table(predict(model_rf), data[,2])
+
+##### rf specific ##### 
+library("randomForest")
+set.seed(1234)
+
+# create 2 train and test dataset
+data_rf <- data
+data_rf <- feature_selection(data, data[,3:2836], as.factor(data[,2]), perc = 0.65)
+ind = sample(2, nrow(data_rf), replace=TRUE, prob=c(0.8,0.2))
+trainData = data_rf[ind==1,]
+testData = data_rf[ind==2,]
+
+# model
+fit_rf = randomForest(as.factor(Subgroup)~., data=trainData[,2:length(trainData)], ntree=2000, proximity=F)
+fit_rf
+plot(fit_rf)
+# importance of the features
+# importance(fit_rf)
+table(importance(fit_rf)<=0)
+# testing data
+pred <- predict(fit_rf, newdata=testData)
+CM <- table(pred, testData$Subgroup)
+CM
+accuracy = (sum(diag(CM)))/sum(CM)
+accuracy
+
+plot(margin(fit_rf, testData$Subgroup))
+
+## comments:
+# accuracy doesn't improve for a bigger amount of tree, but same sample
+# need simulations to get a reliable accurancy
+
+
+
+
