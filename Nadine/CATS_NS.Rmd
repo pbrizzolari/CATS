@@ -43,7 +43,7 @@ merged$Subgroup <- as.factor(merged$Subgroup)
 
 #Spliting data as training and test set
 set.seed(123)
-indxTrain <- createDataPartition(y = merged$`Subgroup`, p = 0.80,list = FALSE)
+indxTrain <- createDataPartition(y = merged$`Subgroup`, p = (2/3) ,list = FALSE)
 training <- merged[indxTrain,]
 testing <- merged[-indxTrain,]
 
