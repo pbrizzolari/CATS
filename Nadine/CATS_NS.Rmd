@@ -1,0 +1,74 @@
+---
+title: "CATS_NS"
+author: "Nadine Slingerland"
+date: "08/04/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(dplyr)
+
+```
+
+``` {r}
+# Import, transpose and merge file
+Train <- read.delim('./Train_Call.txt', header = TRUE, sep = "\t", quote = "\"", dec = ".")
+Train1 <- as.data.frame(t(Train))
+Label <- read.delim('./Train_Clinical.txt', header = TRUE, sep = "\t", quote = "\"", dec = ".")
+row.names(Label) <- Label$Sample
+
+info <- paste(Train$Chromosome, Train$Start, Train$End, Train$Nclone, sep = "_")
+colnames(Train1) <- info
+
+merged <- merge(Label, Train1, by="row.names", all = TRUE)
+row.names(merged) <- merged$Row.names
+merged$Row.names <- NULL
+
+merged <- merged[complete.cases(merged),]
+merged <- merged[-c(1)]
+```
+
+``` {r}
+# Investigate data
+count(merged, Subgroup)
+```
+
+``` {r}
+# K-nn Model
+merged$Subgroup <- as.factor(merged$Subgroup)
+
+#Spliting data as training and test set
+set.seed(123)
+indxTrain <- createDataPartition(y = merged$`Subgroup`, p = 0.80,list = FALSE)
+training <- merged[indxTrain,]
+testing <- merged[-indxTrain,]
+
+#Checking distibution in origanl data and partitioned data
+prop.table(table(training$`Subgroup`)) * 100
+prop.table(table(testing$`Subgroup`)) * 100
+
+#Preprocessing
+trainX <- training[,names(training) != "Subgroup"]
+preProcValues <- preProcess(x = trainX, method = c("center", "scale"))
+preProcValues
+
+#Training and train control
+set.seed(400)
+trctrl <- trainControl(method="repeatedcv", number = 10, repeats = 10) 
+knnFit <- train(Subgroup ~ ., data = training, method = "knn", trControl = trctrl, preProcess = NULL , tuneLength = 20)
+
+knnFit
+
+plot(knnFit)
+
+#Get the confusion matrix to see accuracy value and other parameter values
+knnPredict <- predict(knnFit,newdata = testing )
+
+confusionMatrix(knnPredict, testing$Subgroup )
+
+mean(knnPredict == testing$Subgroup)
+```
