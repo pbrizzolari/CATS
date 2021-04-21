@@ -119,24 +119,52 @@ model <- train(
   method = "ranger",
   trControl = trainControl(
     method = "repeatedcv", 
-    number = 3,
-    repeats = 20,
+    number = 5, # validate
+    repeats = 10, # inner
     verboseIter = TRUE
   )
 )
-model
+
 plot(model)
 
 pred <- predict(model, newdata = testing)
-confusionMatrix(pred, as.factor(testing$Subgroup))
+confus <- confusionMatrix(pred, as.factor(testing$Subgroup))
+confus
 
+tuneGrid <- data.frame(
+  .mtry = seq(10, dim(training)[2], by = 300),
+  .splitrule = "gini",
+  .min.node.size = 5
+)
+sim <- 20
+model_sim <- array(NA, sim)
+model_acc <- array(NA, sim)
+for (i in 1:sim){
+  data_fs <- feature_selection(data, data[,2:dim(data)[2]], as.factor(data[,1]), perc = 0.65)
+  indxTrain <- createDataPartition(y = data[,1], p = 0.7, list = FALSE)
+  training <- data[indxTrain,]
+  testing <- data[-indxTrain,]
+  model <- train(
+    Subgroup~.,
+    tuneGrid = tuneGrid,
+    data = training, 
+    method = "ranger",
+    trControl = trainControl(
+      method = "repeatedcv", 
+      number = 5, # validate
+      repeats = 10, # inner
+      verboseIter = TRUE
+    )
+  )
+  print(i)
+  #plot(model)
+  pred <- predict(model, newdata = testing)
+  confus <- confusionMatrix(pred, as.factor(testing$Subgroup))
+  model_sim[i] <- model$bestTune[1]
+  model_acc[i] <- confus$overall[1]
+}
 
-
-##### rf specific ##### 
-library("randomForest")
-set.seed(1234)
-
-
-
-
+boxplot(model_acc)
+hist(unlist(model_sim), nclass=8)
+plot(model_acc, )
 
