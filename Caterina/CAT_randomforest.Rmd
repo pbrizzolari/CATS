@@ -1,0 +1,58 @@
+---
+title: "CATS_rf_cate"
+author: "Caterina"
+date: "21/4/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstudioapi)
+library(ggfortify)
+library(caret)
+
+```
+
+
+``` {r}
+# upload data
+setwd(dirname(getActiveDocumentContext()$path))
+data <- read.csv2("merged.csv", header = T, sep=";", row.names = 1)
+head(data[,1:7])
+dim(data)
+summary(data[,1:7])
+
+```
+##### Feature selection
+``` {r}
+feature_selection <- function(data, X, y, perc = 0.6){
+  fs_matrix <- filterVarImp(X, y)
+  fs <- apply(fs_matrix,1,mean)
+  sorted_features <- sort(fs, decreasing = T)
+  n <- length(sorted_features[sorted_features >= perc])
+  selected <- sorted_features[1:n]
+  
+  keep <- c(names(data[,1:2]), names(selected))
+  data_fs <- data[, (names(data) %in% keep)]
+  return(data_fs)
+}
+
+data_fs <- feature_selection(data, data[,2:dim(data)[2]], as.factor(data[,1]), perc = 0.6)
+data_fs
+```
+###### PC
+``` {r}
+pc <- prcomp(data_fs[,2:dim(data_fs)[2]], scale.=T, center = TRUE) # con scale.=T ottengo le PC a partire dalle correlazioni
+#summary(pc)
+#biplot(pc)
+
+df_out <- as.data.frame(pc$x)
+df_out$y <- data_fs[,2]
+p<-ggplot(df_out,aes(x=PC1,y=PC2,color=y ))
+p<-p+geom_point()
+p
+```
+
+
+

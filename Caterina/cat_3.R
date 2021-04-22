@@ -10,10 +10,6 @@ head(data[,1:7])
 dim(data)
 summary(data[,1:7])
 
-########## multinomial models ##########
-library(VGAM)
-vglm1 <- vglm(Subgroup~.,data = data, multinomial)
-summary(vglm1)
 
 ########## feature selection ##########
 feature_selection <- function(data, X, y, perc = 0.6){
