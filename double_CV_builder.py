@@ -16,7 +16,7 @@ class DCV():
     outer_repeats = 5
     inner_repeats = 10
     num_features = 150
-    cv_outer = StratifiedShuffleSplit(n_splits=outer_repeats, test_size=1/outer_repeats, random_state=1)  # check if we have to shuffle
+    cv_outer = StratifiedShuffleSplit(n_splits=outer_repeats, test_size=1/outer_repeats, random_state=1)
     cv_inner = StratifiedShuffleSplit(n_splits=inner_repeats, test_size=1/inner_repeats, random_state=1)
 
 
@@ -128,6 +128,8 @@ class DCV():
         return self._best_score
 
     def save_all(self):
+        model = linear_model.LogisticRegression(penalty="elasticnet", max_iter=10000, multi_class='ovr', solver='saga')
+        print(self.Model)
         pass
 
     def __scoring__(self, model, x,y):
@@ -146,10 +148,10 @@ class DCV():
 if __name__ == '__main__':
 
     # imports the data
-    data = pd.read_csv("../raw_data/train_call.txt", index_col=0, delimiter="\t").transpose()
+    data = pd.read_csv("raw_data/train_call.txt", index_col=0, delimiter="\t").transpose()
     topInfo = data.iloc[:3]
     data = data.iloc[4:].dropna(axis=1)
-    classes = pd.read_csv("../raw_data/train_clinical.txt", delimiter="\t", index_col=0)
+    classes = pd.read_csv("raw_data/train_clinical.txt", delimiter="\t", index_col=0)
     data = classes.join(data).set_index("Subgroup").dropna()
     # Add 1 to data because of chi-square feature selection
 
@@ -172,8 +174,8 @@ if __name__ == '__main__':
     print(model.get_params().keys())
     # select which params you want to test with the inner loop
     # space is the paramater space
-    modeller.hyperParams['C'] = [100,10]
-    modeller.hyperParams['l1_ratio'] = [0.1,0.2]
+    modeller.hyperParams['C'] = [100]
+    modeller.hyperParams['l1_ratio'] = [0.1]
     # this does everything for you :)
     # first is the data used, seconds comes the classifications and than with loop the amount of loops you want to do
     modeller.train_fit(data, data.index, loop=1)
@@ -186,3 +188,4 @@ if __name__ == '__main__':
     print(modeller.all_accuracies)
     print(modeller.all_precision)
     print(modeller.all_recall)
+    print(modeller.save_all())
