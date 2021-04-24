@@ -16,8 +16,8 @@ class DCV():
     outer_repeats = 5
     inner_repeats = 10
     num_features = 150
-    cv_outer = StratifiedShuffleSplit(n_splits=outer_repeats, test_size=1/outer_repeats, random_state=1)
-    cv_inner = StratifiedShuffleSplit(n_splits=inner_repeats, test_size=1/inner_repeats, random_state=1)
+    cv_outer = StratifiedShuffleSplit(n_splits=outer_repeats, test_size=1/outer_repeats)
+    cv_inner = StratifiedShuffleSplit(n_splits=inner_repeats, test_size=1/inner_repeats)
 
 
     def __init__(self, Model):
@@ -30,22 +30,18 @@ class DCV():
         self.models = []
         self.features = []
         self.indexes = None
-        self.all_accuracies = None
-        self.all_precision = None
-        self.all_recall = None
+        self.all_accuracies = []
+        self.all_precision = []
+        self.all_recall = []
         self.hyperParams = dict()
 
 
     def train_fit(self, data, classes, loop=1):
         self.indexes = pd.MultiIndex.from_product(self.hyperParams.values(), names=self.hyperParams.keys())
-        self.all_recall = pd.DataFrame()
-        self.all_precision = pd.DataFrame()
-        self.all_accuracies = pd.DataFrame()
         data = self.__data_cleaner__(data)
         classes = self.__class_cleaner__(classes)
-
         for i in range(loop):
-            for outer_train_index, outer_test_index in self.cv_outer.split(data, classes):
+            for j, (outer_train_index, outer_test_index) in enumerate(self.cv_outer.split(data, classes)):
                 outer_train_x = data.iloc[outer_train_index]
                 outer_train_y = classes.iloc[outer_train_index]
                 outer_test_x = data.iloc[outer_test_index]
@@ -53,14 +49,16 @@ class DCV():
                 best_features = SelectKBest(feature_selection.chi2, k=self.num_features).fit(outer_train_x+1, outer_train_y)
                 outer_train_x = outer_train_x.transpose().loc[best_features.get_support()].transpose()
                 outer_test_x = outer_test_x.transpose().loc[best_features.get_support()].transpose()
-                search = GridSearchCV(self.Model, self.hyperParams,scoring=self.__scoring__, cv=self.cv_inner, n_jobs=-1, refit="accuracy")
+                search = GridSearchCV(self.Model, self.hyperParams,scoring=self.__scoring__, cv=self.cv_inner, n_jobs=-1, refit="recall")
                 #print(search)
                 search.fit(outer_train_x, outer_train_y.to_numpy().ravel())
-                #print(search.cv_results_)
-                #print(pd.DataFrame(search.cv_results_["mean_test_score"],index=self.indexes))
-                self.all_accuracies = self.all_precision.append(pd.DataFrame(search.cv_results_["mean_test_accuracy"],index=self.indexes))
-                self.all_precision = self.all_precision.append(pd.DataFrame(search.cv_results_["mean_test_precision"],index=self.indexes))
-                self.all_recall = self.all_recall.append(pd.DataFrame(search.cv_results_["mean_test_recall"],index=self.indexes))
+                #print(pd.DataFrame(search.cv_results_["mean_test_accuracy"]).transpose())
+                self.all_accuracies += [search.cv_results_["mean_test_accuracy"]]
+                self.all_precision += [search.cv_results_["mean_test_precision"]]
+                self.all_recall += [search.cv_results_["mean_test_recall"]]
+                #self.all_accuracies = self.all_precision.append(pd.DataFrame(search.cv_results_["mean_test_accuracy"],index=self.indexes))
+                #self.all_precision = self.all_precision.append(pd.DataFrame(search.cv_results_["mean_test_precision"],index=self.indexes))
+                #self.all_recall = self.all_recall.append(pd.DataFrame(search.cv_results_["mean_test_recall"],index=self.indexes))
                 #print(self.all_accuracies)
                 accuracy = accuracy_score(outer_test_y, search.predict(outer_test_x))
                 precision = precision_score(outer_test_y, search.predict(outer_test_x), average="micro")
@@ -73,6 +71,10 @@ class DCV():
                     self._best_params += [search.best_params_]
                     self._best_features += [best_features.get_support()]
                 print(f"accuracy: {accuracy}; precision:{precision}; model:{search.best_estimator_}")
+        self.all_accuracies = pd.DataFrame(self.all_accuracies,columns=self.indexes)
+        self.all_precision = pd.DataFrame(self.all_precision,columns=self.indexes)
+        self.all_recall = pd.DataFrame(self.all_recall,columns=self.indexes)
+
         self.Model.set_params(**self._best_params[0])
         data = data.transpose().loc[self._best_features[0]].transpose()
         self.Model.fit(data, classes.to_numpy().ravel())
@@ -93,7 +95,7 @@ class DCV():
 
     def __data_cleaner__(self, data):
         if type(data) == pd.DataFrame:
-            print(data.shape)
+            #print(data.shape)
             return data
         elif type(data) == np.ndarray:
             return pd.DataFrame(data)
@@ -135,8 +137,10 @@ class DCV():
     def __scoring__(self, model, x,y):
         y_pred = model.predict(x)
         acc = accuracy_score(y_true=y,y_pred=y_pred)
-        pres = precision_score(y_true=y, y_pred=y_pred, average="micro")
-        recall = recall_score(y_true=y,y_pred=y_pred, average="micro")
+        pres = precision_score(y_true=y, y_pred=y_pred, average="macro", zero_division=1)
+        recall = recall_score(y_true=y,y_pred=y_pred, average="macro", zero_division=1)
+        #print(pres)
+        #print(recall)
         return {"accuracy":acc, "precision":pres,"recall":recall}
 
     # TODO:
@@ -168,23 +172,23 @@ if __name__ == '__main__':
     """
 
     model = linear_model.LogisticRegression(penalty="elasticnet", max_iter=10000, multi_class='ovr', solver='saga')
+
     modeller = DCV(model)
-    print()
     # prints all the params you can change :)
     print(model.get_params().keys())
     # select which params you want to test with the inner loop
     # space is the paramater space
-    modeller.hyperParams['C'] = [100]
-    modeller.hyperParams['l1_ratio'] = [0.1]
+    modeller.hyperParams['C'] = [100,1]
+    modeller.hyperParams['l1_ratio'] = [0.1,0.9]
     # this does everything for you :)
     # first is the data used, seconds comes the classifications and than with loop the amount of loops you want to do
-    modeller.train_fit(data, data.index, loop=1)
+    modeller.train_fit(data, data.index, loop=5)
     # some test code
     print(accuracy_score(DCV.__class_cleaner__(None, data.index),modeller.predict(data)))
     print(topInfo.transpose().iloc[:-1].loc[modeller.get_best_features()[0]])
     print(modeller.get_best_score())
     print(modeller.get_best_features())
-    print(modeller.get_best_features())
+    print(pd.DataFrame(modeller.get_best_features()).replace(True,1))
     print(modeller.all_accuracies)
     print(modeller.all_precision)
     print(modeller.all_recall)
