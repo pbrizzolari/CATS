@@ -97,9 +97,9 @@ class DCV():
     def __test__(self, model, data, classes):
         self.test_accuracy += [
             [accuracy_score(classes, model.predict(data)), model.best_params_.values()]]
-        self.test_precision += [[precision_score(classes, model.predict(data), average="macro"),
+        self.test_precision += [[precision_score(classes, model.predict(data), average="macro", zero_division=0),
                                  model.best_params_.values()]]
-        self.test_recall += [[recall_score(classes, model.predict(data), average="macro"), model.best_params_.values()]]
+        self.test_recall += [[recall_score(classes, model.predict(data), average="macro", zero_division=0), model.best_params_.values()]]
 
     def fit(self, data, classes):
         if self._best_params == None:
