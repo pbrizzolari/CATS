@@ -107,7 +107,7 @@ class DCV():
         data = self.__data_cleaner__(data)
         data = data.transpose().loc[self._best_features[0]].transpose()
         classes = self.__class_cleaner__(classes)
-        self.Model.set_params(**self._best_params)
+        self.Model.set_params(**self._best_params[0])
         self.Model.fit(data, classes)
 
     def predict(self, data):
