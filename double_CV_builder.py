@@ -185,8 +185,8 @@ class DCV():
     def __scoring__(self, model, x, y):
         y_pred = model.predict(x)
         acc = accuracy_score(y_true=y, y_pred=y_pred)
-        pres = precision_score(y_true=y, y_pred=y_pred, average="macro", zero_division=1)
-        recall = recall_score(y_true=y, y_pred=y_pred, average="macro", zero_division=1)
+        pres = precision_score(y_true=y, y_pred=y_pred, average="macro", zero_division=0)
+        recall = recall_score(y_true=y, y_pred=y_pred, average="macro", zero_division=0)
         return {"accuracy": acc, "precision": pres, "recall": recall}
 
     def load(self, params):
